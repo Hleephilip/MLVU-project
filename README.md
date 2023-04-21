@@ -50,3 +50,7 @@ the files at ../mscoco_data/ is like:
 Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md).
 
 For preprocessing, refer to [stylegan2-ada-pytorch](https://github.com/NVlabs/stylegan2-ada-pytorch/blob/main/dataset_tool.py) and [Hugging Face](https://huggingface.co/datasets/conceptual_captions/tree/main).
+
+## Conditional Encoder-Decoder
+
+Implementation based on [Diffusion Autoencoders](https://github.com/phizaz/diffae).
