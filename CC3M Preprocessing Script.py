@@ -24,11 +24,14 @@ import pickle
 import sys
 import tarfile
 import gzip
+import zipfile
 from pathlib import Path
 from typing import Callable, Optional, Tuple, Union
 import clip
+import click
 import numpy as np
 import PIL.Image
+from tqdm import tqdm
 import torch.nn.functional as F
 import torchvision.transforms as T
 import torch
@@ -36,11 +39,71 @@ import cv2
 from collections import OrderedDict
 import os.path as op
 import random
-import glob
 
 
 # In[ ]:
 
+
+def maybe_min(a: int, b: Optional[int]) -> int:
+    if b is not None:
+        return min(a, b)
+    return a
+
+def open_dataset(source: str):
+  images = []
+  captions = []
+
+  max_idx = maybe_min(3318333, None)
+
+
+  for tar_idx in range(301, 306):
+    try:
+      tar_idx_str = f'{tar_idx:05d}'
+      path = os.path.join(source, f'{tar_idx:05d}.tar')
+  
+      with tarfile.open(path) as tar:
+        for img_idx in range(0, 10000):
+          if img_idx % 1000 == 0:
+            print(f'tar {tar_idx} / img {img_idx}')
+          try:
+            idx_str = f'{img_idx:04d}'
+            if f'{tar_idx_str}{idx_str}.jpg' in tar.getnames():
+              image = tar.getmember(f'{tar_idx_str}{idx_str}.jpg')
+              with tar.extractfile(image) as file:
+                image = np.asarray(PIL.Image.open(file))
+                if image.shape != (256, 256, 3):
+                  continue
+                images.append(image)
+                #images.append(image.reshape(-1, 3, 256, 256))
+
+              text = tar.getmember(f'{tar_idx_str}{idx_str}.txt')
+              with tar.extractfile(text) as binary, io.TextIOWrapper(binary) as content:
+                text = content.readlines()
+              #with tar.extractfile(text) as file:
+                #text =s file.read()
+                captions.append(text)
+
+          except:
+            print(f'{tar_idx_str}{idx_str}.jpg failed')
+    except:
+      print(f'{tar_idx_str}.tar failed')
+
+  images = np.asarray(images)
+  # print('before conc',len(images))
+  # images = np.concatenate(images)
+  # print('after conc',images.shape)
+  # images = images.transpose([0, 2, 3, 1]) 
+  # print('after transp',images.shape)
+
+  def iterate_images():
+    for idx, img in enumerate(images): 
+      yield dict(img=img, txt=captions[idx])  
+
+  return max_idx, iterate_images()
+
+
+# source = '.'
+# open_dataset(source)
 
 def custom_reshape(img, mode='bicubic', ratio=0.99):   # more to be implemented here
     full_size = img.shape[-2]
@@ -161,8 +224,8 @@ def open_dest(dest: str) -> Tuple[str, Callable[[str, Union[bytes, str]], None],
         return dest, folder_write_bytes, lambda: None
 
 
-source = '/home/n0/mlvu028/cc3m'
-dest = '/home/n0/mlvu028/cc3m_results'
+source = '/content/drive/MyDrive/Colab Notebooks/MLVU Team Project/sample_data1'
+dest = '/content/drive/MyDrive/Colab Notebooks/MLVU Team Project/sample_data1_results'
 resize_filter = 'lanczos'
 transform = 'center-crop'
 width = 256
@@ -220,10 +283,11 @@ clip_model, _ = clip.load("ViT-L/14", device=device)  # for image embedding
 clip_model_txt, _ = clip.load("ViT-L/14", device=device) # for text embedding
 clip_model.to(device).eval()
 clip_model_txt.to(device).eval()
+
 print('start')
 if dest == '':
     print('--dest output filename or directory must not be an empty string')
-#num_files, input_iter = open_dataset(source, annotation, max_images=max_images)
+num_files, input_iter = open_dataset(source)
 print('source ready')
 archive_root_dir, save_bytes, close_dest = open_dest(dest)
 print('target ready')
@@ -238,120 +302,113 @@ clip_img_features = []
 clip_txt_features = []
 s_count = 0
 f_count = 0
-file_count = -1
-indices = []
 
-#for idx, image in tqdm(enumerate(input_iter), total=num_files):
-for filename in sorted(glob.glob(source + '/*.jpg')):
-    file_count += 1
-    print(file_count)
-    
+for idx, image in tqdm(enumerate(input_iter), total=num_files):
+#for filename in sorted(glob.glob(source + '/*.jpg')):
+  #with open(filename) as f:
+      idx_str = f'{idx:09d}'
+      #archive_fname = f'{idx_str[:5]}/img{idx_str}.png'
+      #idx = os.path.basename(filename).split('.')[0]
+      #idx = int(idx)
+      #idx_str = f'{idx:09d}'
+      #print(idx_str[:5])
+      archive_fname = f'{idx_str[:5]}/img{idx_str}.jpg'
+      try:
+          # Apply crop and resize.
 
-    with open(filename) as f:
-        print(filename)
-        #idx_str = f'{idx:08d}'
-        #archive_fname = f'{idx_str[:5]}/img{idx_str}.png'
-        idx = os.path.basename(filename).split('.')[0]
-        idx = int(idx)
-        idx_str = f'{idx:09d}'
-        archive_fname = f'{idx_str[:5]}/img{idx_str}.jpg'
-        indices.append(idx_str)
+          # a = PIL.Image.fromarray(image['img'], {1: 'L', 3: 'RGB'}[channels])
+          # print('before transforming')
+          # a.show()
 
-        img = os.path.join(source, filename)
-        img = PIL.Image.open(img)
-        img = np.asarray(img)
+          img = transform_image(image['img'])
 
-        try:
-            # Apply crop and resize.
-            img = transform_image(img)
-            # Transform may drop images.
-            if img is None:
-                continue
+          # Transform may drop images.
+          if img is None:
+              continue
 
-            # Error check to require uniform image attributes across
-            # the whole dataset.
-            channels = img.shape[2] if img.ndim == 3 else 1
-            cur_image_attrs = {
-                'width': img.shape[1],
-                'height': img.shape[0],
-                'channels': channels
-            }
-            if dataset_attrs is None:
-                dataset_attrs = cur_image_attrs
-                width = dataset_attrs['width']
-                height = dataset_attrs['height']
-                if width != height:
-                    error(f'Image dimensions after scale and crop are required to be square.  Got {width}x{height}')
-                if dataset_attrs['channels'] not in [1, 3]:
-                    error('Input images must be stored as RGB or grayscale')
-                if width != 2 ** int(np.floor(np.log2(width))):
-                    error('Image width/height after scale and crop are required to be power-of-two')
-
-            if dataset_attrs == cur_image_attrs:
+          # Error check to require uniform image attributes across
+          # the whole dataset.
+          channels = img.shape[2] if img.ndim == 3 else 1
+          cur_image_attrs = {
+              'width': img.shape[1],
+              'height': img.shape[0],
+              'channels': channels
+          }
+          if dataset_attrs is None:
+              dataset_attrs = cur_image_attrs
+              width = dataset_attrs['width']
+              height = dataset_attrs['height']
+              if width != height:
+                  error(f'Image dimensions after scale and crop are required to be square.  Got {width}x{height}')
+              if dataset_attrs['channels'] not in [1, 3]:
+                  error('Input images must be stored as RGB or grayscale')
+              if width != 2 ** int(np.floor(np.log2(width))):
+                  error('Image width/height after scale and crop are required to be power-of-two')
+          if dataset_attrs == cur_image_attrs:
               #         elif dataset_attrs != cur_image_attrs:
               #             err = [f'  dataset {k}/cur image {k}: {dataset_attrs[k]}/{cur_image_attrs[k]}' for k in dataset_attrs.keys()]
               #             error(f'Image {archive_fname} attributes must be equal across all images of the dataset.  Got:\n' + '\n'.join(err))
-                with torch.no_grad():
-                    # Save the image as an uncompressed PNG.
-                    img = PIL.Image.fromarray(img, {1: 'L', 3: 'RGB'}[channels])
-                    feature = torch.zeros(1, 768).to(device)
-                    cut_num_ = 1
+              with torch.no_grad():
+                  # Save the image as an uncompressed PNG.
+                  img = PIL.Image.fromarray(img, {1: 'L', 3: 'RGB'}[channels])
+                  # print('uncompressed')
+                  # img.show()
+                  feature = torch.zeros(1, 768).to(device)
+                  cut_num_ = 1
+                  for _ in range(cut_num_):  # random crop and resize to get the average feature of image
+                      reshaped_img = custom_reshape(T.ToTensor()(img).unsqueeze(0))
+                      normed_img = clip_preprocess()(reshaped_img).to(device)
+                      with torch.no_grad():
+                          feature += clip_model.encode_image(normed_img)
+                          # print(normed_img.shape) # torch.Size([1, 3, 224, 224])
+                  feature = feature / cut_num_
 
-                    for _ in range(cut_num_):  # random crop and resize to get the average feature of image
-                        reshaped_img = custom_reshape(T.ToTensor()(img).unsqueeze(0))
-                        normed_img = clip_preprocess()(reshaped_img).to(device)
-                        with torch.no_grad():
-                            feature += clip_model.encode_image(normed_img)
-                            # print(normed_img.shape) # torch.Size([1, 3, 224, 224])
-                    feature = feature / cut_num_
+                  text = image['txt']
+                  # print(len(text))
+                  #text_filename = idx_str + '.txt'
+                  #if os.path.isfile(text_filename):
+                  #  text_path = os.path.join(source, text_filename)
+                  #  with open(text_path) as t:
+                  #    text = t.read()
+                
+                  text_feature_list = []
+                  for text_line in text:
+                      if text_line != '' and not text_line.isspace():
+                          try:
+                              tokenized_text = clip.tokenize([text_line]).to(device)
+                              text_feature = clip_model_txt.encode_text(tokenized_text)
+                              text_feature_list.append(text_feature.view(-1).cpu().numpy().tolist())
+                          except:
+                              # if the text is too long, we heuristically split and average the features
+                              split_text = text_line.split('.')
+                              split_text_list = []
+                              for te in split_text:
+                                  if te != '.' and te != '' and not te.isspace():
+                                      split_text_list += te.split(',')
+                              tokenized_text = []
+                              for te in split_text_list:
+                                  tokenized_text.append(clip.tokenize([te]).cuda())
 
+                              text_feature = 0.
+                              for te in tokenized_text:
+                                  text_feature += clip_model_txt.encode_text(te) / len(tokenized_text)
+                              text_feature_list.append(text_feature.view(-1).cpu().numpy().tolist())
+                              print('text too long')
 
-                    #text = image['txt']
-                    # print(len(text))
-                    text_filename = idx_str + '.txt'
-                    if os.path.isfile(text_filename):
-                        text_path = os.path.join(source, text_filename)
-                        with open(text_path) as t:
-                            text = t.read()
+                  clip_img_features.append([archive_fname, feature.view(-1).cpu().numpy().tolist()])
+                  clip_txt_features.append([archive_fname, text_feature_list])
 
-                            text_feature_list = []
-                            for text_line in text:
-                                if text_line != '' and not text_line.isspace():
-                                    try:
-                                        tokenized_text = clip.tokenize([text_line]).to(device)
-                                        text_feature = clip_model_txt.encode_text(tokenized_text)
-                                        text_feature_list.append(text_feature.view(-1).cpu().numpy().tolist())
-                                    except:
-                                        # if the text is too long, we heuristically split and average the features
-                                        split_text = text_line.split('.')
-                                        split_text_list = []
-                                        for te in split_text:
-                                            if te != '.' and te != '' and not te.isspace():
-                                                split_text_list += te.split(',')
-                                        tokenized_text = []
-                                        for te in split_text_list:
-                                            tokenized_text.append(clip.tokenize([te]).cuda())
-
-                                        text_feature = 0.
-                                        for te in tokenized_text:
-                                            text_feature += clip_model_txt.encode_text(te) / len(tokenized_text)
-                                        text_feature_list.append(text_feature.view(-1).cpu().numpy().tolist())
-                                        print('text too long')
-
-                    clip_img_features.append([archive_fname, feature.view(-1).cpu().numpy().tolist()])
-                    clip_txt_features.append([archive_fname, text_feature_list])
-
-            image_bits = io.BytesIO()
-            img.save(image_bits, format='png', compress_level=0, optimize=False)
-            save_bytes(os.path.join(archive_root_dir, archive_fname), image_bits.getbuffer())
-            #labels.append([archive_fname, image['label']] if image['label'] is not None else None)
-            s_count += 1
-
-        except:
-            print(f'{archive_fname} failed')
-            f_count += 1
-
-  # if s_count == 10 or f_count == 10 : break
+          image_bits = io.BytesIO()
+          img.save(image_bits, format='png', compress_level=0, optimize=False)
+          save_bytes(os.path.join(archive_root_dir, archive_fname), image_bits.getbuffer())
+          #labels.append([archive_fname, image['label']] if image['label'] is not None else None)
+          s_count += 1
+      
+      except:
+          print(f'{archive_fname} failed')
+          f_count += 1
+      
+      # if s_count == 10 or f_count == 10 : break
 
 metadata = {
     'labels': labels if all(x is not None for x in labels) else None,
@@ -362,4 +419,3 @@ metadata = {
 save_bytes(os.path.join(archive_root_dir, 'dataset.json'), json.dumps(metadata))
 print(f'{s_count} {f_count}')
 close_dest()
-
