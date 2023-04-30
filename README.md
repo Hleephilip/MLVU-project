@@ -20,16 +20,16 @@ Dataset can be downloaded from [here](https://cocodataset.org/#download).
 Command for training set preprocessing:
 
 ```
-python preproc_datasets.py --source=../mscoco_data/train2014/ \
-                           --annotation=../mscoco_data/annotations/captions_train2014.json \
+python preproc_datasets.py --source=../DATA/mscoco_data/train2014/ \
+                           --annotation=../DATA/mscoco_data/annotations/captions_train2014.json \
                            --dest=COCO2014_train_CLIP_ViTL14.zip --width=256 --height=256 \
                            --transform=center-crop --emb_dim 768
 ```
 
-the files at ../mscoco_data/ is like:
+The files at directory `../DATA/mscoco_data/` is like:
 
 ```
-../mscoco/data
+../DATA/mscoco/data/
   ├── train2014
   │   ├── COCO_train2014_000000000009.jpg
   │   ├── COCO_train2014_0000000000025.jpg
@@ -50,6 +50,26 @@ the files at ../mscoco_data/ is like:
 Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md).
 
 For preprocessing, refer to [stylegan2-ada-pytorch](https://github.com/NVlabs/stylegan2-ada-pytorch/blob/main/dataset_tool.py) and [Hugging Face](https://huggingface.co/datasets/conceptual_captions/tree/main).
+
+
+Command for training set preprocessing:
+
+```
+python preproc_datasets_cc3m.py --source=../DATA/cc3m_train/ \
+                                --dest=CC3M_train_CLIP_ViTL14.zip --width=256 --height=256 \
+                                --transform=center-crop --emb_dim 768
+```
+
+There are total 996 files in `../DATA/cc3m_train/`. Directory structure is like:
+
+```
+../DATA/cc3m_train/
+  ├── 00000_stats.json
+  ├── 00000.parquet
+  ├── 00000.tar
+  ├── ...
+  └── 000331.tar
+``` 
 
 ## Conditional Encoder-Decoder
 
