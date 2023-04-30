@@ -47,10 +47,7 @@ The files at directory `../DATA/mscoco_data/` is like:
 
 ### CC3M
 
-Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md).
-
-For preprocessing, refer to [stylegan2-ada-pytorch](https://github.com/NVlabs/stylegan2-ada-pytorch/blob/main/dataset_tool.py) and [Hugging Face](https://huggingface.co/datasets/conceptual_captions/tree/main).
-
+Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md). Total 77G storage is required.
 
 Command for training set preprocessing:
 
