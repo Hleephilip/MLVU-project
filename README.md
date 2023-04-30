@@ -29,7 +29,7 @@ python preproc_datasets.py --source=../DATA/mscoco_data/train2014/ \
 The files at directory `../DATA/mscoco_data/` is like:
 
 ```
-../DATA/mscoco/data/
+../DATA/mscoco_data/
   ├── train2014
   │   ├── COCO_train2014_000000000009.jpg
   │   ├── COCO_train2014_0000000000025.jpg
