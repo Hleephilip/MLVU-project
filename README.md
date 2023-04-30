@@ -65,7 +65,7 @@ There are total 996 files in `../DATA/cc3m_train/`. Directory structure is like:
   ├── 00000.parquet
   ├── 00000.tar
   ├── ...
-  └── 000331.tar
+  └── 00331.tar
 ``` 
 
 ## Conditional Encoder-Decoder
