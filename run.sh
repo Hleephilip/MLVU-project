@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=0-12:00:00
-#SBATCH --mem=24000MB
-#SBATCH --cpus-per-task=8
+#SBATCH --mem=24220MB
+#SBATCH --cpus-per-task=32
 
 source /home/n0/mlvu019/.bashrc
 eval "$(conda shell.bash hook)"
