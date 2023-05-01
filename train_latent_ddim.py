@@ -5,7 +5,7 @@ from templates_latent import *
 from typing import List
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Training a model for leaf classification', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch_size', type=int, default=256, help='256, 512, 2048 available')
     parser.add_argument('--train_data_path', type=str, default='../DATA/COCO2014_train_CLIP_ViTL14_v2.zip')
@@ -27,10 +27,9 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
+    warnings.filterwarnings(action='ignore')
     assert args.batch_size in [256, 512, 2048]
     conf = latent_conditional_ddim(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     train(conf, device=device, args=args)
     
-    warnings.filterwarnings(action='ignore')
-    init_train()
