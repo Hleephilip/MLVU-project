@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=0-12:00:00
-#SBATCH --mem=24220MB
+#SBATCH --mem=32000MB
 #SBATCH --cpus-per-task=32
 
 source /home/n0/mlvu019/.bashrc
