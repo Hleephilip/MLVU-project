@@ -6,9 +6,7 @@ work in progress
 
 ## Requirements
 
-The implementation is based on [stylegan2-ada-pytorch](https://github.com/NVlabs/stylegan2-ada-pytorch) and [CLIP](https://github.com/openai/CLIP), the required packages can be found in the links.
-
-Or refer to [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt)
+Refer to [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt)
 
 
 ## Data Preprocessing
