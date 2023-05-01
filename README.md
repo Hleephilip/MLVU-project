@@ -73,13 +73,19 @@ There are total 996 files in `../DATA/cc3m_train/`. Directory structure is like:
 
 Implementation based on [Diffusion Autoencoders](https://github.com/phizaz/diffae).
 
-Command for training :
+Submit a job for training :
 
 ```
-python train_latent_ddim.py --data_path=../DATA/COCO2014_train_CLIP_ViTL14_v2.zip \
+sbatch run.sh
+```
+
+Command for python (inside `run.sh`) : 
+
+```
+python train_latent_ddim.py --train_data_path=../DATA/COCO2014_train_CLIP_ViTL14_v2.zip \
+                            --val_data_path=../DATA/COCO2014_val_CLIP_ViTL14_v2.zip
                             --epochs=100 --batch_size=256 --learning_rate=1e-4 \
-                            --log_name='exp1' --log_version='0' --gpus=[1] \
-                            --cfg_prob=0.1 --cfg_guidance=5.0
+                            --log_name='exp1' --log_version='0' --gpus=[1]
 ```
 
 Using only 1 gpu is highly recommended.
