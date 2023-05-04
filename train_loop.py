@@ -378,8 +378,8 @@ class LatentModel(pl.LightningModule):
         after each training epoch ...
         """
         print(f"       Epoch {self.current_epoch}  loss : {outputs[0]['loss']:.4f}  latent_loss : {outputs[0]['latent_loss']:.4f}  recon_loss : {outputs[0]['recon_loss']:.4f}")
-        # epoch_sim = self.calc_cos_sim().item()
-        # print(f"       Similarity : {epoch_sim:.4f}")
+        epoch_sim = self.calc_cos_sim().item()
+        print(f"       Similarity : {epoch_sim:.4f}")
 
 
     def on_before_optimizer_step(self, optimizer: Optimizer, optimizer_idx: int) -> None:
