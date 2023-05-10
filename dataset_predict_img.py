@@ -81,10 +81,10 @@ class ZipDataset(Dataset):
             ...
             ]
             '''
-            self.clip_img_mean = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().mean(dim=0, keepdim=True)
-            self.clip_img_std = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().std(dim=0, keepdim=True)
-            self.clip_txt_mean = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().mean(dim=0, keepdim=True)
-            self.clip_txt_std = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().std(dim=0, keepdim=True)
+            self.clip_txt_mean = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_txt.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_txt_std = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_txt.values()), dim=0).float().std(dim=0, keepdim=True)
+            self.clip_img_mean = torch.cat(tuple(_ for _ in self.clip_img.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_img_std = torch.cat(tuple(_ for _ in self.clip_img.values()), dim=0).float().std(dim=0, keepdim=True)
             
 
     def __len__(self):
@@ -97,7 +97,7 @@ class ZipDataset(Dataset):
         # print(cos_sim(img_embedding, txt_embedding[txt_idx]))
         # print(img.shape) # size : (3, 64, 64)
         txt_idx = random.randint(0, len(img_embedding) - 1)
-        return img_embedding[txt_idx], txt_embedding # for predicting text embedding conditioned on image embedding
+        return img_embedding[txt_idx], txt_embedding # for predicting image embedding conditioned on text embedding
     
         # txt_idx = random.randint(0, len(txt_embedding) - 1)
         # return img_embedding, txt_embedding[txt_idx] # for predicting text embedding conditioned on image embedding
