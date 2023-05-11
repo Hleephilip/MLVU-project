@@ -88,4 +88,13 @@ python train_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTL1
                             --log_name "exp1" --log_version "v0"
 ```
 
-Using only 1 gpu is highly recommended.
+Using only 1 gpu is highly recommended
+
+## Experiments
+
+Check results in [here](https://docs.google.com/spreadsheets/d/1iorV8BHk1StLiq6OIMCb_GdRo_Lg9sVqjwcGnNep-6A/edit#gid=1980661715).
+
+## Paper
+
+Edit in [here](https://www.overleaf.com/project/6453de916a02aa1601de1b36).
+
