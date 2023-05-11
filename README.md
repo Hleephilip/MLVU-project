@@ -96,5 +96,5 @@ Check results in [here](https://docs.google.com/spreadsheets/d/1iorV8BHk1StLiq6O
 
 ## Paper
 
-Edit in [here](https://www.overleaf.com/project/6453de916a02aa1601de1b36).
+[Overleaf Link](https://www.overleaf.com/project/6453de916a02aa1601de1b36).
 
