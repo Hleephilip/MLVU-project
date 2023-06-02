@@ -9,7 +9,7 @@ from model.unet_autoenc import AutoencReturn
 from config_base import BaseConfig
 import enum
 import math
-
+import torch
 import numpy as np
 import torch as th
 from model import *
@@ -96,6 +96,11 @@ class GaussianDiffusionBeatGans:
         self.posterior_mean_coef2 = ((1.0 - self.alphas_cumprod_prev) *
                                      np.sqrt(alphas) /
                                      (1.0 - self.alphas_cumprod))
+        
+    def KL_divergence(self, mu, log_sigma):
+        kldiv = -log_sigma - 0.5 + (torch.exp(2 * log_sigma) + mu ** 2) * 0.5
+        kldiv = torch.mean(torch.sum(kldiv, dim=1))
+        return kldiv
 
     def training_losses(self,
                         model: Model,
@@ -137,6 +142,9 @@ class GaussianDiffusionBeatGans:
                                               c=c, # modified
                                               **model_kwargs)
             model_output = model_forward.pred
+            model_mu = model_forward.mu
+            model_log_sigma = model_forward.log_sigma
+            terms['kl_div'] = self.KL_divergence(model_mu, model_log_sigma) if model_forward.mu is not None else torch.tensor(0)
 
             _model_output = model_output
             if self.conf.train_pred_xstart_detach:

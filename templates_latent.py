@@ -43,6 +43,15 @@ def latent_mlp_2048_norm_20layers(conf: TrainConfig):
     conf.net_latent_skip_layers = list(range(1, conf.net_latent_layers))
     return conf
 
+def latent_64_batch_size(conf: TrainConfig):
+    conf.batch_size = 64
+    # conf.batch_size = 4
+    conf.eval_ema_every_samples = 100_000_000
+    conf.eval_every_samples = 100_000_000
+    conf.sample_every_samples = 1_000_000
+    conf.save_every_samples = 2_000_000
+    conf.total_samples = 301_000_000
+    return conf
 
 def latent_256_batch_size(conf: TrainConfig):
     conf.batch_size = 256
@@ -99,8 +108,10 @@ def latent_conditional_ddim(args):
     # conf = ffhq256_autoenc()
     conf = latent_base(args.learning_rate)
     conf = latent_diffusion128_config(conf)
-    conf = latent_mlp_2048_norm_20layers(conf)
-    if args.batch_size == 256:
+    conf = latent_mlp_2048_norm_10layers(conf)
+    if args.batch_size == 64:
+        conf = latent_64_batch_size(conf)
+    elif args.batch_size == 256:
         conf = latent_256_batch_size(conf)
     elif args.batch_size == 512:
         conf = latent_512_batch_size(conf)

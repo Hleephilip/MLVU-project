@@ -55,7 +55,7 @@ class ZipDataset(Dataset):
             if 'dataset.json' in z.namelist():
                 # make clip image embedding dict.
                 with z.open('dataset.json', 'r') as file:
-                    img_embedding = json.load(file)['clip_txt_features']
+                    img_embedding = json.load(file)['clip_img_features']
                     for fname, embedding in tqdm(img_embedding):
                         self.clip_img[fname] = torch.tensor(embedding)
                         self.clip_img[fname] /= self.clip_img[fname].norm(dim=-1, keepdim=True)
@@ -65,7 +65,7 @@ class ZipDataset(Dataset):
                 
                 # make clip text embedding dict.
                 with z.open('dataset.json', 'r') as file:
-                    txt_embedding = json.load(file)['clip_img_features']
+                    txt_embedding = json.load(file)['clip_txt_features']
                     for fname, embedding in tqdm(txt_embedding):
                         self.clip_txt[fname] = torch.tensor(embedding)
                         self.clip_txt[fname] /= self.clip_txt[fname].norm(dim=-1, keepdim=True)
@@ -81,10 +81,10 @@ class ZipDataset(Dataset):
             ...
             ]
             '''
-            self.clip_txt_mean = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_txt.values()), dim=0).float().mean(dim=0, keepdim=True)
-            self.clip_txt_std = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_txt.values()), dim=0).float().std(dim=0, keepdim=True)
-            self.clip_img_mean = torch.cat(tuple(_ for _ in self.clip_img.values()), dim=0).float().mean(dim=0, keepdim=True)
-            self.clip_img_std = torch.cat(tuple(_ for _ in self.clip_img.values()), dim=0).float().std(dim=0, keepdim=True)
+            self.clip_img_mean = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_img_std = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().std(dim=0, keepdim=True)
+            self.clip_txt_mean = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_txt_std = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().std(dim=0, keepdim=True)
             
 
     def __len__(self):
@@ -94,13 +94,10 @@ class ZipDataset(Dataset):
         img_file = self.idx_to_file[idx]
         img_embedding = self.clip_img[img_file]
         txt_embedding = self.clip_txt[img_file]
+        txt_idx = random.randint(0, len(txt_embedding) - 1)
         # print(cos_sim(img_embedding, txt_embedding[txt_idx]))
         # print(img.shape) # size : (3, 64, 64)
-        txt_idx = random.randint(0, len(img_embedding) - 1)
-        return img_embedding[txt_idx], txt_embedding # for predicting image embedding conditioned on text embedding
-    
-        # txt_idx = random.randint(0, len(txt_embedding) - 1)
-        # return img_embedding, txt_embedding[txt_idx] # for predicting text embedding conditioned on image embedding
+        return img_embedding, txt_embedding[txt_idx]
 
 
 class ImageDataset(Dataset):

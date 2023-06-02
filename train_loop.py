@@ -12,15 +12,23 @@ from torch.optim.optimizer import Optimizer
 from torch.nn import CosineSimilarity
 from renderer import *
 from config import *
-
+from itertools import chain
 
 class CustomValidationLoop(EvaluationLoop):
     pass
 
+class MappingMat(nn.Module):
+    def __init__(self, conf):
+        super(MappingMat, self).__init__()
+        self.conf = conf
+        self.net = nn.Linear(self.conf.net_beatgans_embed_channels, self.conf.net_beatgans_embed_channels, bias=False)
 
+    def forward(self, x):
+        return self.net(x)
 
 class LatentModel(pl.LightningModule):
-    def __init__(self, conf: TrainConfig, train_data_path: str, val_data_path: str, cfg_prob: float, cfg_guidance: float):
+    def __init__(self, conf: TrainConfig, train_data_path: str, val_data_path: str, cfg_prob: float, cfg_guidance: float, 
+                 lambda_1: float, lambda_2: float, lambda_3: float, gamma: float, use_default_init: bool):
         super().__init__()
 
         if conf.seed is not None:
@@ -47,6 +55,9 @@ class LatentModel(pl.LightningModule):
         assert conf.train_mode.use_latent_net()
         self.latent_sampler = conf.make_latent_diffusion_conf().make_sampler() # DDPM
         self.eval_latent_sampler = conf.make_latent_eval_diffusion_conf().make_sampler() # DDIM
+
+        self.mapping_mat = MappingMat(conf).to(self.device)
+        if not use_default_init: self.mapping_mat.apply(self.init_mapping_mat)
 
         # initial variables for consistent sampling
         self.register_buffer(
@@ -76,9 +87,19 @@ class LatentModel(pl.LightningModule):
             self.val_conds_mean = None
             self.val_conds_std = None
         
-        self.lmb1 = 1.
-        self.lmb2 = 1.
-        
+        self.lmb1 = lambda_1
+        self.lmb2 = lambda_2
+        self.lmb3 = lambda_3
+        self.sim_result = []
+        self.gamma = gamma
+    
+    def init_mapping_mat(self, layer):
+        if isinstance(layer, nn.Linear):
+            nn.init.normal_(layer.weight.data, mean=1.0, std=0.02)
+            if layer.bias is not None:
+                nn.init.constant_(layer.bias.data, val=0.0)
+
+
     def normalize_cond(self, cond):
         cond2 = (cond - self.conds_mean.to(self.device)) / self.conds_std.to(self.device)
         return cond2
@@ -291,14 +312,13 @@ class LatentModel(pl.LightningModule):
                     latent_losses = self.latent_sampler.training_losses(
                         model=self.model, x_start=z_txt, t=t, c=None)
                     
-                    recon_loss = 0.0
-
+                    recon_loss = torch.tensor(0.0)
                 else:
                     # use condition
                     latent_losses = self.latent_sampler.training_losses(
                         model=self.model, x_start=z_txt, t=t, c=z_img)
                     
-                    z_txt_hat = render_latent(
+                    z_txt_hat_cond = render_latent(
                             conf=self.conf,
                             model=self.model,
                             x_T=z_txt,
@@ -307,23 +327,48 @@ class LatentModel(pl.LightningModule):
                             x_mean=self.x_mean,
                             x_std=self.x_std)
 
+                    z_txt_hat_uncond = render_latent(
+                                conf=self.conf,
+                                model=self.model,
+                                x_T=z_txt,
+                                cond=None,
+                                latent_sampler=self.eval_latent_sampler, # use DDIM : 50 step
+                                x_mean=self.x_mean,
+                                x_std=self.x_std)
+                    
+                    if not self.do_cfg: 
+                        print('Not using classifier-free guidance')
+                        z_txt_hat = z_txt_hat_cond
+                    else:
+                        # apply CFG
+                        z_txt_hat = (1. + self.cfg_guidance) * z_txt_hat_cond - self.cfg_guidance * z_txt_hat_uncond 
+                        
+
                     # print('sampled :', z_txt_hat.shape) # [B, 768]
                     # print('original :', z_txt.shape) # [B, 768]
                     # print(torch.min(self.denormalize_x(z_txt)), torch.max(self.denormalize_x(z_txt)), torch.min(z_txt_hat), torch.max(z_txt_hat))
                     # reconstruction loss
                     if self.conf.latent_znormalize:
+                        z_img_unnorm = (z_img * self.conds_std.to(self.device)) + self.conds_mean.to(self.device)
                         z_txt_unnorm = (z_txt * self.x_std.to(self.device)) + self.x_mean.to(self.device)
-                        recon_loss = nn.L1Loss()(z_txt_unnorm, z_txt_hat)
+                        z_txt_sampled = self.mapping_mat(z_img_unnorm) + self.gamma * z_txt_hat / torch.norm(z_txt_hat) # AX + \gamma * B, A = z_img_unnorm
+                       
+                        # recon_loss = nn.L1Loss()(z_txt_unnorm, z_txt_hat)
+                        recon_loss = nn.L1Loss()(z_txt_unnorm, z_txt_sampled)
+
                     else:
-                        recon_loss = nn.L1Loss()(z_txt, z_txt_hat)
+                        # recon_loss = nn.L1Loss()(z_txt, z_txt_hat)
+                        z_txt_sampled = self.mapping_mat(z_img) + self.gamma * z_txt_hat / torch.norm(z_txt_hat)  
+                        recon_loss = nn.L1Loss()(z_txt, z_txt_sampled)
+                        
                     # train only do the latent diffusion
-                
                       
                 # print(latent_losses['loss'], recon_loss)
                 losses = {
                     'latent': latent_losses['loss'] * self.lmb1,
                     'recon': recon_loss * self.lmb2,
-                    'loss': latent_losses['loss'] * self.lmb1 + recon_loss * self.lmb2
+                    'ca': latent_losses['kl_div'] * self.lmb3,
+                    'loss': latent_losses['loss'] * self.lmb1 + recon_loss * self.lmb2 + latent_losses['kl_div'] * self.lmb3,
                 }
 
             else:
@@ -331,20 +376,20 @@ class LatentModel(pl.LightningModule):
 
             loss = losses['loss'].mean()
             # divide by accum batches to make the accumulated gradient exact!
-            for key in ['loss', 'latent', 'recon'] : # in ['loss', 'vae', 'latent', 'mmd', 'chamfer', 'arg_cnt']:
+            for key in ['loss', 'latent', 'recon', 'ca'] : # in ['loss', 'vae', 'latent', 'mmd', 'chamfer', 'arg_cnt']:
                 if key in losses:
                     losses[key] = self.all_gather(losses[key]).mean()
 
             if self.global_rank == 0:
                 self.logger.experiment.add_scalar('loss', losses['loss'])
-                for key in ['latent', 'recon'] : # in ['vae', 'latent', 'mmd', 'chamfer', 'arg_cnt']:
+                for key in ['latent', 'recon', 'ca'] : # in ['vae', 'latent', 'mmd', 'chamfer', 'arg_cnt']:
                     if key in losses:
                         self.logger.experiment.add_scalar(
                             f'loss/{key}', losses[key], self.num_samples)
             
             # self.log("latent_loss", losses['latent'], on_step=False, on_epoch=True, prog_bar=True, logger=False)
 
-        return {'loss': loss, 'latent_loss': losses['latent'], 'recon_loss': losses['recon']}
+        return {'loss': loss, 'latent_loss': losses['latent'], 'recon_loss': losses['recon'], 'ca_loss': losses['ca']}
 
 
     def on_train_batch_end(self, outputs, batch, batch_idx: int, dataloader_idx: int) -> None:
@@ -377,8 +422,9 @@ class LatentModel(pl.LightningModule):
         """
         after each training epoch ...
         """
-        print(f"       Epoch {self.current_epoch}  loss : {outputs[0]['loss']:.4f}  latent_loss : {outputs[0]['latent_loss']:.4f}  recon_loss : {outputs[0]['recon_loss']:.4f}")
+        print(f"       Epoch {self.current_epoch}  loss : {outputs[0]['loss']:.4f}  latent_loss : {outputs[0]['latent_loss']:.4f}  recon_loss : {outputs[0]['recon_loss']:.4f}   augmentation_loss : {outputs[0]['ca_loss']:.4f}")
         epoch_sim = self.calc_cos_sim().item()
+        self.sim_result.append((self.current_epoch, epoch_sim))
         print(f"       Similarity : {epoch_sim:.4f}")
 
 
@@ -397,6 +443,7 @@ class LatentModel(pl.LightningModule):
     def calc_cos_sim(self):
         # set up for validation
         self.model.eval()
+        self.mapping_mat.eval()
         torch.set_grad_enabled(False)
 
         out_lst = []
@@ -409,6 +456,7 @@ class LatentModel(pl.LightningModule):
 
         # set up for train
         self.model.train()
+        self.mapping_mat.train()
         torch.set_grad_enabled(True)
         return out_lst.mean()
 
@@ -451,10 +499,15 @@ class LatentModel(pl.LightningModule):
                     z_txt_hat = (1. + self.cfg_guidance) * z_txt_hat_cond - self.cfg_guidance * z_txt_hat_uncond
                 
                 if self.conf.latent_znormalize:
+                    z_img_unnorm = (z_img * self.val_conds_std.to(self.device)) + self.val_conds_mean.to(self.device)
                     z_txt_unnorm = (z_txt * self.val_x_std.to(self.device)) + self.val_x_mean.to(self.device)
-                    output = self.cos_sim(z_txt_hat, z_txt_unnorm)
+                    z_txt_sampled = self.mapping_mat(z_img_unnorm) + self.gamma * z_txt_hat / torch.norm(z_txt_hat) # AX + \gamma * B, A = z_img_unnorm
+                    output = self.cos_sim(z_txt_sampled, z_txt_unnorm)
+
                 else:
-                    output = self.cos_sim(z_txt_hat, z_txt)
+                    z_txt_sampled = self.mapping_mat(z_img) + self.gamma * z_txt_hat / torch.norm(z_txt_hat)  
+                    output = self.cos_sim(z_txt_sampled, z_txt)
+
             else:
                 raise NotImplementedError()
 
@@ -469,26 +522,39 @@ class LatentModel(pl.LightningModule):
     def configure_optimizers(self):
         out = {}
         if self.conf.optimizer == OptimizerType.adam:
-            optim = torch.optim.Adam(self.model.parameters(),
+            optim = torch.optim.Adam(chain(self.model.parameters(), self.mapping_mat.parameters()),
                                      lr=self.conf.lr,
                                      weight_decay=self.conf.weight_decay)
+            # optim = torch.optim.Adam([{'params': self.model.parameters()},
+            #                          {'params': self.mapping_mat.parameters(), 'lr': 2*1e-3}],
+            #                          lr=self.conf.lr,
+            #                          weight_decay=self.conf.weight_decay)
         elif self.conf.optimizer == OptimizerType.adamw:
-            optim = torch.optim.AdamW(self.model.parameters(),
+            optim = torch.optim.AdamW(chain(self.model.parameters(), self.mapping_mat.parameters()),
                                       lr=self.conf.lr,
                                       weight_decay=self.conf.weight_decay)
+            # optim = torch.optim.AdamW([{'params': self.model.parameters()},
+            #                          {'params': self.mapping_mat.parameters(), 'lr': 2*1e-3}],
+            #                          lr=self.conf.lr,
+            #                          weight_decay=self.conf.weight_decay)
         else:
             raise NotImplementedError()
         
         out['optimizer'] = optim
 
+        
         if self.conf.warmup > 0:
-            sched = torch.optim.lr_scheduler.LambdaLR(optim,
-                                                      lr_lambda=WarmupLR(
-                                                          self.conf.warmup))
+            sched  = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optim, T_0=10, T_mult=2, eta_min=1e-5)
+            # sched = torch.optim.lr_scheduler.LambdaLR(optim,
+            #                                           lr_lambda=WarmupLR(
+            #                                               self.conf.warmup))
             out['lr_scheduler'] = {
                 'scheduler': sched,
                 'interval': 'step',
             }
+        
+        # sched = torch.optim.lr_scheduler.StepLR(optim, step_size=10, gamma=0.5)
+        # out['lr_scheduler'] = {'scheduler': sched, 'interval': 'step',}
         return out
 
     def split_tensor(self, x):
@@ -521,7 +587,8 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
     # assert not (conf.fp16 and conf.grad_clip > 0
     #             ), 'pytorch lightning has bug with amp + gradient clipping'
     # model = LatentModel(conf, '../DATA/sample_train.zip')
-    model = LatentModel(conf, args.train_data_path, args.val_data_path, args.cfg_prob, args.cfg_guidance)
+    model = LatentModel(conf, args.train_data_path, args.val_data_path, args.cfg_prob, args.cfg_guidance, 
+                        args.lambda_1, args.lambda_2, args.lambda_3, args.gamma, args.use_default_init)
 
     if not os.path.exists(conf.logdir):
         os.makedirs(conf.logdir)
@@ -548,7 +615,16 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
 
     # tb_logger = pl_loggers.TensorBoardLogger(save_dir=conf.logdir, name=args.log_name, version=args.log_version)
 
-
+    print('lr:', args.learning_rate)
+    print('log name:', args.log_name)
+    print('cfg_prob:', args.cfg_prob)
+    print('cfg_guidance:', args.cfg_guidance)
+    print('lambda_1:', args.lambda_1)
+    print('lambda_2:', args.lambda_2)
+    print('lambda_3:', args.lambda_3)
+    print('gamma:', args.gamma)
+    print('use_default_init:', args.use_default_init)
+    
     plugins = []
     if len(gpus) == 1 and nodes == 1:
         accelerator = None
@@ -557,7 +633,7 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
         from pytorch_lightning.plugins import DDPPlugin
 
         # important for working with gradient checkpoint
-        plugins.append(DDPPlugin(find_unused_parameters=False))
+        plugins.append(DDPPlugin(find_unused_parameters=True))
 
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -584,7 +660,10 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
         raise NotImplementedError()
     else:
         raise NotImplementedError()
-
+    
+    print("------------------------------------- Cosine Similarity -------------------------------------")
+    for item in model.sim_result:
+        print(f"Epoch {item[0]} : {item[1]:.4f}")
     # print(model.device)
     # print(model.conf.train_mode.require_dataset_infer())
     # print(model.conf.optimizer)

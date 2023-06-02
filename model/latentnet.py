@@ -21,9 +21,32 @@ class LatentNetType(Enum):
 
 
 class LatentNetReturn(NamedTuple):
-    pred: torch.Tensor = None
+    pred: torch.Tensor = None,
+    mu: torch.Tensor = None,
+    log_sigma: torch.Tensor = None
 
+class ConditioningAugmention(nn.Module):
+    def __init__(self, input_dim, emb_dim):
+        super(ConditioningAugmention, self).__init__()
+        self.input_dim = input_dim
+        self.intermediate_dim = 512
+        self.emb_dim = emb_dim
+        self.layer = nn.Sequential(
+            nn.Linear(self.input_dim, self.intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(self.intermediate_dim, self.emb_dim * 2),
+        )
+    
+    def forward(self, x):
+        _ = self.layer(x)
+        mu, log_sigma = _[:, :self.emb_dim], _[:, self.emb_dim:]
 
+        B = mu.shape[0]
+        eps = torch.randn(B, self.emb_dim).to('cuda')
+        condition = eps * log_sigma.exp() + mu
+
+        return condition, mu, log_sigma
+    
 @dataclass
 class MLPSkipNetConfig(BaseConfig):
     """
@@ -104,11 +127,18 @@ class MLPSkipNet(nn.Module):
                     condition_bias=conf.condition_bias,
                     dropout=dropout,
                 ))
+        
         self.last_act = conf.last_act.get_act()
+        # self.conditioning_aug = ConditioningAugmention(conf.num_channels, conf.num_channels)
 
     def forward(self, x, t, c, **kwargs):
         t = timestep_embedding(t, self.conf.num_time_emb_channels)
         cond_t = self.time_embed(t)
+        # if c is not None: 
+        #     c, mu, log_sigma = self.conditioning_aug(c)
+        # else:
+        #     mu, log_sigma = None, None
+        mu, log_sigma = None, None
         h = x
         for i in range(len(self.layers)):
             if i in self.conf.skip_layers:
@@ -116,7 +146,7 @@ class MLPSkipNet(nn.Module):
                 h = torch.cat([h, x], dim=1)
             h = self.layers[i].forward(x=h, cond_t=cond_t, c=c)
         h = self.last_act(h)
-        return LatentNetReturn(h)
+        return LatentNetReturn(h, mu, log_sigma)
 
 
 class MLPLNAct(nn.Module):
@@ -142,8 +172,20 @@ class MLPLNAct(nn.Module):
             self.linear_emb_t = nn.Linear(cond_channels, out_channels)
             self.cond_t_layers = nn.Sequential(self.act, self.linear_emb_t)
 
-            self.linear_emb_c = nn.Linear(cond_channels, out_channels)
-            self.cond_c_layers = nn.Sequential(self.act, self.linear_emb_c)
+            # self.linear_emb_c = nn.Linear(cond_channels, out_channels)
+            self.cond_c_layers_1 = nn.Sequential(self.act, 
+                                               nn.Linear(cond_channels, 512),
+                                               self.act
+                                               )
+            self.cond_c_layers_2 = nn.Sequential(nn.Linear(512, 512),
+                                               self.act,
+                                               nn.Linear(512, 512),
+                                               self.act,
+                                               nn.Linear(512, 512),
+                                                )
+            self.cond_c_layers_3 = nn.Sequential(self.act,
+                                               nn.Linear(512, out_channels)
+                                               )
 
         if norm:
             self.norm = nn.LayerNorm(out_channels)
@@ -183,7 +225,9 @@ class MLPLNAct(nn.Module):
             # (n, c) or (n, c * 2)
             cond_t = self.cond_t_layers(cond_t)
             if c is not None:
-                c = self.cond_c_layers(c)
+                c = self.cond_c_layers_1(c)
+                _c = self.cond_c_layers_2(c) + c
+                c = self.cond_c_layers_3(_c)
                 # print(cond_t.shape) # [B, 2048]
                 # print(c.shape) # [B, 2048]
             cond = (cond_t, c)
