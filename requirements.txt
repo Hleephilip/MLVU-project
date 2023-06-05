@@ -8,3 +8,4 @@ webdataset
 pytorch-lightning==1.4.5
 torchmetrics==0.5.0
 tqdm
+lmdb==1.4.0
