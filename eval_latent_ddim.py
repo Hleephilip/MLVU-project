@@ -21,7 +21,6 @@ if __name__ == '__main__':
     parser.add_argument('--log_print_interval', type=int, default=1)
     parser.add_argument('--gpus', type=List[int], default=[0], help='recommendation: use 1 gpu')
     parser.add_argument('--target', type=str, default="txt", help='candidates: img, txt, wav')
-    parser.add_argument('--cond', type=str, default="img", help='candidates: img, txt, wav')
     parser.add_argument('--cfg_prob', type=float, default=0.1)
     parser.add_argument('--cfg_guidance', type=float, default=5.0)
     parser.add_argument('--lambda_1', type=float, default=1.0)
@@ -29,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_3', type=float, default=1.0)
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--use_default_init', action='store_true')
+    parser.add_argument('--checkpoint_path', type=str, default="./pretrained/predict_img_B32_epoch=67-step=21963-v1.ckpt")
     
     args = parser.parse_args()
 
