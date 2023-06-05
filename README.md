@@ -71,6 +71,8 @@ There are total 996 files in `../DATA/cc3m_train/`. Directory structure is like:
 
 ## Conditional Encoder-Decoder
 
+### Training
+
 Implementation based on [Diffusion Autoencoders](https://github.com/phizaz/diffae).
 
 Submit a job for training :
@@ -82,13 +84,41 @@ sbatch run.sh
 Command for python (inside `run.sh`) : 
 
 ```
-python train_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTL14_v2.zip" \
-                            --val_data_path "../DATA/COCO2014_val_CLIP_ViTL14_v2.zip" \
+python train_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
+                            --val_data_path "../DATA/COCO2014_val_CLIP_ViTB32.zip" \
                             --epochs 100 --batch_size 256 --learning_rate 1e-4 \
-                            --log_name "exp1" --log_version "v0"
+                            --log_name "exp1" --log_version "v0" --target "txt" --use_default_init
 ```
 
-Using only 1 gpu is highly recommended
+Using only 1 gpu is highly recommended.
+
+
+### Evaluation
+
+Command for python (inside `run.sh`) : 
+
+```
+python eval_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
+                           --val_data_path "../DATA/COCO2014_val_CLIP_ViTB32.zip" \
+                           --checkpoint_path <YOUR_CHECKPOINT_PATH> \
+                           --batch_size 2048 --target "txt" --use_default_init
+```
+
+### Inference model using text prompt (Generate image embedding)
+
+Command for python (inside `run.sh`) : 
+
+```
+python sample_z.py  --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
+                    --val_data_path "../DATA/COCO2014_val_CLIP_ViTB32.zip" \
+                    --cfg_prob 0.05 --use_default_init \
+                    --target "img" --checkpoint_path <YOUR_CHECKPOINT_PATH> \
+                    --text_query "A white boat floating on a lake under mountains"
+```
+
+## Downstream tasks
+
+TBD
 
 ## Experiments
 
