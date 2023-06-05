@@ -104,7 +104,7 @@ python eval_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32
                            --batch_size 2048 --target "txt" --use_default_init
 ```
 
-### Inference model using text prompt (Generate image embedding)
+### Inference using text prompt (generate image embedding)
 
 Command for python (inside `run.sh`) : 
 
