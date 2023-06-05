@@ -805,7 +805,7 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
         for item in model.sim_result:
             print(f"Epoch {item[0]} : {item[1]:.4f}")
     elif mode == 'eval':
-        eval_path = "./pretrained/predict_img_B32_epoch=67-step=21963-v1.ckpt"
+        eval_path = args.checkpoint_path
         print('loading from:', eval_path)
         state = torch.load(eval_path, map_location='cpu')
         print('step:', state['global_step'])
