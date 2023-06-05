@@ -13,6 +13,7 @@ from torch.nn import CosineSimilarity
 from renderer import *
 from config import *
 from itertools import chain
+from tqdm import tqdm
 
 class CustomValidationLoop(EvaluationLoop):
     pass
@@ -28,7 +29,7 @@ class MappingMat(nn.Module):
 
 class LatentModel(pl.LightningModule):
     def __init__(self, conf: TrainConfig, train_data_path: str, val_data_path: str, cfg_prob: float, cfg_guidance: float, 
-                 lambda_1: float, lambda_2: float, lambda_3: float, gamma: float, use_default_init: bool):
+                 lambda_1: float, lambda_2: float, lambda_3: float, gamma: float, use_default_init: bool, target_domain: str):
         super().__init__()
 
         if conf.seed is not None:
@@ -49,7 +50,7 @@ class LatentModel(pl.LightningModule):
         self.ema_model.eval()
 
         self.cos_sim = CosineSimilarity(dim=1)
-        
+        self.target_domain = target_domain
         self.T_sampler = conf.make_T_sampler()
         # if conf.train_mode.use_latent_net():
         assert conf.train_mode.use_latent_net()
@@ -139,13 +140,26 @@ class LatentModel(pl.LightningModule):
             print('local seed:', seed)
         ##############################################
         
-        print('Preparing train data')
-        self.train_data = ZipDataset(self.train_data_path) # self.conf.make_dataset()
-        print('train data:', len(self.train_data))
+        if self.target_domain == 'txt':
+            print('Preparing train data')
+            self.train_data = ZipDataset_txt(self.train_data_path)
+            print('train data:', len(self.train_data))
 
-        print('Preparing val data')
-        self.val_data = ZipDataset(self.val_data_path)
-        print('val data:', len(self.val_data))
+            print('Preparing val data')
+            self.val_data = ZipDataset_txt(self.val_data_path)
+            print('val data:', len(self.val_data))
+        
+        elif self.target_domain == 'img':
+            print('Preparing train data')
+            self.train_data = ZipDataset_img(self.train_data_path)
+            print('train data:', len(self.train_data))
+
+            print('Preparing val data')
+            self.val_data = ZipDataset_img(self.val_data_path)
+            print('val data:', len(self.val_data))
+
+        else:
+            raise NotImplementedError()
 
     def _train_dataloader(self, drop_last=False):
         """
@@ -440,7 +454,7 @@ class LatentModel(pl.LightningModule):
             torch.nn.utils.clip_grad_norm_(params, max_norm=self.conf.grad_clip)
             # print('after:', grads_norm(iter_opt_params(optimizer)))
 
-    def calc_cos_sim(self):
+    def calc_cos_sim(self, verbose=False):
         # set up for validation
         self.model.eval()
         self.mapping_mat.eval()
@@ -448,9 +462,18 @@ class LatentModel(pl.LightningModule):
 
         out_lst = []
         with torch.no_grad():
-            for batch_idx, batch in enumerate(self.val_dataloader()):
-                out = self.cos_sim_step(batch, batch_idx)
-                out_lst.append(out)
+            if not verbose:
+                for batch_idx, batch in enumerate(self.val_dataloader()):
+                    out = self.cos_sim_step(batch, batch_idx)
+                    out_lst.append(out)
+            else:
+                for batch_idx, batch in tqdm(enumerate(self.val_dataloader())):
+                    out = self.cos_sim_step(batch, batch_idx)
+                    out_lst.append(out)
+            
+            # os.makedirs("assets", exist_ok=True)
+            # torch.save({"txt_mean": self.val_conds_mean, "txt_std": self.val_conds_std}, "assets/COCO_CLIP_B32_val_txt_info.pt")
+            # torch.save({"img_mean": self.val_x_mean, "img_std": self.val_x_std}, "assets/COCO_CLIP_B32_val_img_info.pt")
 
         out_lst = torch.cat(out_lst)
 
@@ -561,9 +584,131 @@ class LatentModel(pl.LightningModule):
         # only used in log_sample()
         raise NotImplementedError()
     
-    def test_step(self, batch, *args, **kwargs):
-        # TODO : implement here!
-        raise NotImplementedError()
+    def setup_eval(self):
+        self.model.eval()
+        self.mapping_mat.eval()
+        self.ema_model.eval()
+
+        print('Preparing val data')
+        if self.target_domain == 'txt':
+            self.val_data = ZipDataset_txt(self.val_data_path)
+        elif self.target_domain == 'img':
+            self.val_data = ZipDataset_img(self.val_data_path)
+        else:
+            return NotImplementedError()
+        print('val data:', len(self.val_data))
+    
+    @torch.no_grad()
+    def test_step(self):
+        print('test step start')
+        self.setup_eval()
+        cos_sim = self.calc_cos_sim(verbose=True).item()
+        return cos_sim
+
+    @torch.no_grad()
+    def run_sample(self, condition):
+        if self.target_domain == 'txt':
+            return self.run_sample_txt(condition)
+        elif self.target_domain == 'img':
+            return self.run_sample_img(condition)
+        else:
+            raise NotImplementedError()
+
+    @torch.no_grad()
+    def run_sample_img(self, condition):
+        self.val_conds_mean = torch.load('assets/COCO_CLIP_B32_val_txt_info.pt')["txt_mean"]
+        self.val_conds_std = torch.load('assets/COCO_CLIP_B32_val_txt_info.pt')["txt_std"]
+        self.val_x_mean = torch.load('assets/COCO_CLIP_B32_val_img_info.pt')["img_mean"]
+        self.val_x_std = torch.load('assets/COCO_CLIP_B32_val_img_info.pt')["img_std"]
+        with amp.autocast(False):
+            condition = condition.to(self.device)
+
+            if self.conf.latent_znormalize:
+                condition = (condition - self.val_conds_mean.to(self.device)) / self.val_conds_std.to(self.device)
+            
+            if self.conf.train_mode.is_latent_diffusion():
+                z_hat_cond = render_latent(
+                            conf=self.conf,
+                            model=self.model,
+                            x_T=condition, # not important
+                            cond=condition,
+                            latent_sampler=self.eval_latent_sampler, # use DDIM : 50 step
+                            x_mean=self.val_x_mean,
+                            x_std=self.val_x_std)
+
+                z_hat_uncond = render_latent(
+                            conf=self.conf,
+                            model=self.model,
+                            x_T=condition, # not important
+                            cond=None,
+                            latent_sampler=self.eval_latent_sampler, # use DDIM : 50 step
+                            x_mean=self.val_x_mean,
+                            x_std=self.val_x_std)
+                
+                if not self.do_cfg: 
+                    print('Not using classifier-free guidance')
+                    z_hat = z_hat_cond
+                else:
+                    # apply CFG
+                    z_hat = (1. + self.cfg_guidance) * z_hat_cond - self.cfg_guidance * z_hat_uncond
+                
+                if self.conf.latent_znormalize:
+                    condition_unnorm = (condition * self.val_conds_std.to(self.device)) + self.val_conds_mean.to(self.device)
+                    z_sampled = self.mapping_mat(condition_unnorm) + self.gamma * z_hat / torch.norm(z_hat) # AX + \gamma * B, A = z_img_unnorm
+                else:
+                    z_sampled = self.mapping_mat(condition) + self.gamma * z_hat / torch.norm(z_hat)  
+
+            else:
+                raise NotImplementedError()
+        return z_sampled
+    
+    @torch.no_grad()
+    def run_sample_txt(self, condition):
+        self.val_conds_mean = torch.load('assets/COCO_CLIP_B32_val_img_info.pt')["img_mean"]
+        self.val_conds_std = torch.load('assets/COCO_CLIP_B32_val_img_info.pt')["img_std"]
+        self.val_x_mean = torch.load('assets/COCO_CLIP_B32_val_txt_info.pt')["txt_mean"]
+        self.val_x_std = torch.load('assets/COCO_CLIP_B32_val_txt_info.pt')["txt_std"]
+        with amp.autocast(False):
+            condition = condition.to(self.device)
+
+            if self.conf.latent_znormalize:
+                condition = (condition - self.val_conds_mean.to(self.device)) / self.val_conds_std.to(self.device)
+            
+            if self.conf.train_mode.is_latent_diffusion():
+                z_hat_cond = render_latent(
+                            conf=self.conf,
+                            model=self.model,
+                            x_T=condition, # not important
+                            cond=condition,
+                            latent_sampler=self.eval_latent_sampler, # use DDIM : 50 step
+                            x_mean=self.val_x_mean,
+                            x_std=self.val_x_std)
+
+                z_hat_uncond = render_latent(
+                            conf=self.conf,
+                            model=self.model,
+                            x_T=condition, # not important
+                            cond=None,
+                            latent_sampler=self.eval_latent_sampler, # use DDIM : 50 step
+                            x_mean=self.val_x_mean,
+                            x_std=self.val_x_std)
+                
+                if not self.do_cfg: 
+                    print('Not using classifier-free guidance')
+                    z_hat = z_hat_cond
+                else:
+                    # apply CFG
+                    z_hat = (1. + self.cfg_guidance) * z_hat_cond - self.cfg_guidance * z_hat_uncond
+                
+                if self.conf.latent_znormalize:
+                    condition_unnorm = (condition * self.val_conds_std.to(self.device)) + self.val_conds_mean.to(self.device)
+                    z_sampled = self.mapping_mat(condition_unnorm) + self.gamma * z_hat / torch.norm(z_hat) # AX + \gamma * B, A = z_img_unnorm
+                else:
+                    z_sampled = self.mapping_mat(condition) + self.gamma * z_hat / torch.norm(z_hat)  
+
+            else:
+                raise NotImplementedError()
+        return z_sampled
     
 
 class WarmupLR:
@@ -588,7 +733,7 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
     #             ), 'pytorch lightning has bug with amp + gradient clipping'
     # model = LatentModel(conf, '../DATA/sample_train.zip')
     model = LatentModel(conf, args.train_data_path, args.val_data_path, args.cfg_prob, args.cfg_guidance, 
-                        args.lambda_1, args.lambda_2, args.lambda_3, args.gamma, args.use_default_init)
+                        args.lambda_1, args.lambda_2, args.lambda_3, args.gamma, args.use_default_init, args.target)
 
     if not os.path.exists(conf.logdir):
         os.makedirs(conf.logdir)
@@ -623,6 +768,7 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
     print('lambda_2:', args.lambda_2)
     print('lambda_3:', args.lambda_3)
     print('gamma:', args.gamma)
+    print('target_domain:', args.target)
     print('use_default_init:', args.use_default_init)
     
     plugins = []
@@ -655,15 +801,22 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
 
     if mode == 'train':
         trainer.fit(model)
+        print("------------------------------------- Cosine Similarity -------------------------------------")
+        for item in model.sim_result:
+            print(f"Epoch {item[0]} : {item[1]:.4f}")
     elif mode == 'eval':
-        # TODO : implement here!
-        raise NotImplementedError()
+        eval_path = "./pretrained/predict_img_B32_epoch=67-step=21963-v1.ckpt"
+        print('loading from:', eval_path)
+        state = torch.load(eval_path, map_location='cpu')
+        print('step:', state['global_step'])
+        model.load_state_dict(state['state_dict'])
+        print('finished loading checkpoint')
+        model = model.to(device)
+        out = model.test_step()
+        print("Measured Cosine Similarity :", out)
     else:
         raise NotImplementedError()
     
-    print("------------------------------------- Cosine Similarity -------------------------------------")
-    for item in model.sim_result:
-        print(f"Epoch {item[0]} : {item[1]:.4f}")
     # print(model.device)
     # print(model.conf.train_mode.require_dataset_infer())
     # print(model.conf.optimizer)

@@ -21,7 +21,6 @@ if __name__ == '__main__':
     parser.add_argument('--log_print_interval', type=int, default=1)
     parser.add_argument('--gpus', type=List[int], default=[0], help='recommendation: use 1 gpu')
     parser.add_argument('--target', type=str, default="txt", help='candidates: img, txt, wav')
-    parser.add_argument('--cond', type=str, default="img", help='candidates: img, txt, wav')
     parser.add_argument('--cfg_prob', type=float, default=0.1)
     parser.add_argument('--cfg_guidance', type=float, default=5.0)
     parser.add_argument('--lambda_1', type=float, default=1.0)

@@ -454,8 +454,8 @@ def convert_dataset(
     """
 
     PIL.Image.init() # type: ignore
-    clip_model, _ = clip.load("ViT-L/14")  # for image embedding
-    clip_model_txt, _ = clip.load("ViT-L/14") # for text embedding
+    clip_model, _ = clip.load("ViT-B/32")  # for image embedding
+    clip_model_txt, _ = clip.load("ViT-B/32") # for text embedding
     clip_model.cuda().eval()
     clip_model_txt.cuda().eval()
     print('start')
@@ -554,10 +554,10 @@ def convert_dataset(
                     clip_img_features.append([archive_fname, feature.view(-1).cpu().numpy().tolist()])
                     clip_txt_features.append([archive_fname, text_feature_list])
 
-            image_bits = io.BytesIO()
-            img.save(image_bits, format='png', compress_level=0, optimize=False)
-            save_bytes(os.path.join(archive_root_dir, archive_fname), image_bits.getbuffer())
-            labels.append([archive_fname, image['label']] if image['label'] is not None else None)
+            # image_bits = io.BytesIO()
+            # img.save(image_bits, format='png', compress_level=0, optimize=False)
+            # save_bytes(os.path.join(archive_root_dir, archive_fname), image_bits.getbuffer())
+            # labels.append([archive_fname, image['label']] if image['label'] is not None else None)
             s_count += 1
         
         except:
@@ -567,7 +567,7 @@ def convert_dataset(
         # if s_count == 10 or f_count == 10 : break
 
     metadata = {
-        'labels': labels if all(x is not None for x in labels) else None,
+        # 'labels': labels if all(x is not None for x in labels) else None,
         'clip_img_features': clip_img_features if all(x is not None for x in clip_img_features) else None,
         'clip_txt_features': clip_txt_features if all(x is not None for x in clip_txt_features) else None,
 

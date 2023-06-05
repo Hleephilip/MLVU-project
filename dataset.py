@@ -16,8 +16,8 @@ from torchvision import transforms
 from torchvision.datasets import CIFAR10, LSUNClass
 from tqdm import tqdm
 
-class ZipDataset(Dataset):
-    def __init__(self, data_path):
+class ZipDataset_img(Dataset):
+    def __init__(self, data_path, return_fname=False):
         super().__init__()
         self.data_path = data_path
         self.img_list = {}
@@ -31,6 +31,7 @@ class ZipDataset(Dataset):
 
         self.clip_txt_mean = None
         self.clip_txt_std = None
+        self.return_fname = return_fname # default : False
 
         self.load_zip_file(self.data_path)
 
@@ -94,13 +95,97 @@ class ZipDataset(Dataset):
         img_file = self.idx_to_file[idx]
         img_embedding = self.clip_img[img_file]
         txt_embedding = self.clip_txt[img_file]
-        # print(cos_sim(img_embedding, txt_embedding[txt_idx]))
-        # print(img.shape) # size : (3, 64, 64)
         txt_idx = random.randint(0, len(img_embedding) - 1)
-        return img_embedding[txt_idx], txt_embedding # for predicting image embedding conditioned on text embedding
+        if not self.return_fname:
+            return img_embedding[txt_idx], txt_embedding # for predicting image embedding conditioned on text embedding
+        else:
+            return img_file, img_embedding[txt_idx], txt_embedding
     
-        # txt_idx = random.randint(0, len(txt_embedding) - 1)
-        # return img_embedding, txt_embedding[txt_idx] # for predicting text embedding conditioned on image embedding
+
+class ZipDataset_txt(Dataset):
+    def __init__(self, data_path, return_fname=False):
+        super().__init__()
+        self.data_path = data_path
+        self.img_list = {}
+        self.clip_img = {}
+        self.clip_txt = {}
+        self.idx_to_file = {}
+        self.cnt = 0
+
+        self.clip_img_mean = None
+        self.clip_img_std = None
+
+        self.clip_txt_mean = None
+        self.clip_txt_std = None
+        self.return_fname = return_fname # default : False
+
+        self.load_zip_file(self.data_path)
+
+    def file_ext(self, name: Union[str, Path]) -> str:
+        return str(name).split('.')[-1]
+    
+    def is_image_ext(self, fname: Union[str, Path]) -> bool:
+        ext = self.file_ext(fname).lower()
+        return f'.{ext}' in PIL.Image.EXTENSION # type: ignore
+    
+    def image_transform(self):
+        # not used in this project
+        raise NotImplementedError()
+        return T.Compose([
+            T.Resize((64, 64)),
+            T.ToTensor()
+        ])
+
+    def load_zip_file(self, source):
+        with zipfile.ZipFile(source, mode='r') as z:
+            # Load preprocessed CLIP image and text embeddings
+            if 'dataset.json' in z.namelist():
+                # make clip image embedding dict.
+                with z.open('dataset.json', 'r') as file:
+                    img_embedding = json.load(file)['clip_img_features']
+                    for fname, embedding in tqdm(img_embedding):
+                        self.clip_img[fname] = torch.tensor(embedding)
+                        self.clip_img[fname] /= self.clip_img[fname].norm(dim=-1, keepdim=True)
+
+                        self.idx_to_file[self.cnt] = fname
+                        self.cnt += 1
+                
+                # make clip text embedding dict.
+                with z.open('dataset.json', 'r') as file:
+                    txt_embedding = json.load(file)['clip_txt_features']
+                    for fname, embedding in tqdm(txt_embedding):
+                        self.clip_txt[fname] = torch.tensor(embedding)
+                        self.clip_txt[fname] /= self.clip_txt[fname].norm(dim=-1, keepdim=True)
+
+                assert len(self.clip_img.keys()) == len(self.clip_txt.keys())
+                assert len(self.clip_img.keys()) == self.cnt
+                # print('finished loading')
+            '''
+            print(input_images)
+            ['00000/img00000000.png', '00000/img00000001.png', '00000/img00000002.png', 
+            '00000/img00000003.png', '00000/img00000004.png', '00001/img00000005.png', 
+            '00001/img00000006.png', '00001/img00000007.png', '00001/img00000008.png', '00001/img00000009.png'
+            ...
+            ]
+            '''
+            self.clip_img_mean = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_img_std = torch.cat(tuple(_.unsqueeze(0) for _ in self.clip_img.values()), dim=0).float().std(dim=0, keepdim=True)
+            self.clip_txt_mean = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().mean(dim=0, keepdim=True)
+            self.clip_txt_std = torch.cat(tuple(_ for _ in self.clip_txt.values()), dim=0).float().std(dim=0, keepdim=True)
+            
+
+    def __len__(self):
+        return self.cnt
+
+    def __getitem__(self, idx):
+        img_file = self.idx_to_file[idx]
+        img_embedding = self.clip_img[img_file]
+        txt_embedding = self.clip_txt[img_file]
+        txt_idx = random.randint(0, len(txt_embedding) - 1)
+        if not self.return_fname:
+            return img_embedding, txt_embedding[txt_idx]
+        else:
+            return img_file, img_embedding, txt_embedding[txt_idx]
 
 
 class ImageDataset(Dataset):
