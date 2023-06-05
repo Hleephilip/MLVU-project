@@ -21,7 +21,7 @@ def print_and_save(ret_ours: dict, ret_baseline: dict, idx_dict: dict):
         img = Image.fromarray(np.array(PIL.Image.open(idx_dict[k])))
         img.save(os.path.join('retrieval_result/ours', f"top_{i+1}.png"))
     
-    print("\n[Result] Baseine")
+    print("\n[Result] Baseline")
     for i, (k, v) in enumerate(ret_baseline):
         print(f"Top {i + 1} : {idx_dict[k]} ({100 *v:.4f}%)")
         img = Image.fromarray(np.array(PIL.Image.open(idx_dict[k])))
@@ -100,6 +100,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_default_init', action='store_true')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/predict_img_B32_epoch=67-step=21963-v1.ckpt")
     parser.add_argument('--text_query', type=str, default="a picture of a car")
+    parser.add_argument('--num_images_sample', type=int, default=10)
     args = parser.parse_args()
 
     warnings.filterwarnings(action='ignore')
@@ -124,9 +125,9 @@ if __name__ == '__main__':
 
     print("Loading datasets ...")
     if args.target == 'img':
-        dataset_for_retrieval = ZipDataset_img(args.train_data_path, return_fname=True)
+        dataset_for_retrieval = ZipDataset_img(args.val_data_path, return_fname=True)
     elif args.target == 'txt':
-        dataset_for_retrieval = ZipDataset_txt(args.train_data_path, return_fname=True)
+        dataset_for_retrieval = ZipDataset_txt(args.val_data_path, return_fname=True)
     else:
         raise NotImplementedError()
 
@@ -142,7 +143,7 @@ if __name__ == '__main__':
         cond, tgt = cond.to(device), tgt.to(device)
         fname = fname[0]
         similarity = cos_sim(tgt, out_feature).item()
-        if len(ret_ours) < 10: 
+        if len(ret_ours) < args.num_images_sample: 
             ret_ours[fname] = similarity
             if similarity < min_sim:
                 min_sim_file = fname
@@ -166,7 +167,7 @@ if __name__ == '__main__':
         cond, tgt = cond.to(device), tgt.to(device)
         fname = fname[0]
         similarity = cos_sim(tgt, text_features).item()
-        if len(ret_baseline) < 10: 
+        if len(ret_baseline) < args.num_images_sample: 
             ret_baseline[fname] = similarity
             if similarity < min_sim:
                 min_sim_file = fname
@@ -180,9 +181,9 @@ if __name__ == '__main__':
                 min_sim_file = [k for k, v in ret_baseline.items() if min(ret_baseline.values()) == v][0]
                 min_sim = ret_baseline[min_sim_file]
 
-    # idx_dict = open_image_folder("../DATA/mscoco_data/train2014/", "../DATA/mscoco_data/annotations/captions_train2014.json")
-    # torch.save(idx_dict, 'assets/COCO_img_idx.pt')
-    idx_dict = torch.load('assets/COCO_img_idx.pt')
+    # idx_dict = open_image_folder("../DATA/mscoco_data/val2014/", "../DATA/mscoco_data/annotations/captions_val2014.json")
+    # torch.save(idx_dict, 'assets/COCO_val_img_idx.pt')
+    idx_dict = torch.load('assets/COCO_val_img_idx.pt')
     print_and_save(sorted(ret_ours.items(), reverse=True, key = lambda item: item[1]),
                    sorted(ret_baseline.items(), reverse=True, key = lambda item: item[1]),
                    idx_dict)
