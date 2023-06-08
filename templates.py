@@ -56,7 +56,7 @@ def autoenc_base():
     conf.make_model_conf()
     return conf
 
-def latent_base(lr):
+def latent_base(lr, cvd, xvd, ckpt_path):
     """
     base configuration for all latent DDIM models.
     """
@@ -70,6 +70,11 @@ def latent_base(lr):
     conf.model_name = ModelName.latent_conditional
     conf.T_eval = 50
     conf.T = 1000
+    conf.condition_vec_dim = cvd
+    conf.x_vec_dim = xvd
+    conf.style_ch = xvd
+    conf.net_beatgans_embed_channels = xvd
+    conf.base_dir = ckpt_path
     conf.make_model_conf()
     return conf
 

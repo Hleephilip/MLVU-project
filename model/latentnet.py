@@ -64,6 +64,8 @@ class MLPSkipNetConfig(BaseConfig):
     last_act: Activation = Activation.none
     num_time_layers: int = 2
     time_last_act: bool = False
+    condition_vec_dim: int = None
+    x_vec_dim: int = None
 
     def make_model(self):
         return MLPSkipNet(self)
@@ -126,6 +128,7 @@ class MLPSkipNet(nn.Module):
                     use_cond=cond,
                     condition_bias=conf.condition_bias,
                     dropout=dropout,
+                    condition_vec_chans=conf.condition_vec_dim
                 ))
         
         self.last_act = conf.last_act.get_act()
@@ -160,6 +163,7 @@ class MLPLNAct(nn.Module):
         cond_channels: int,
         condition_bias: float = 0,
         dropout: float = 0,
+        condition_vec_chans: int = 0
     ):
         super().__init__()
         self.activation = activation
@@ -174,7 +178,7 @@ class MLPLNAct(nn.Module):
 
             # self.linear_emb_c = nn.Linear(cond_channels, out_channels)
             self.cond_c_layers_1 = nn.Sequential(self.act, 
-                                               nn.Linear(cond_channels, 512),
+                                               nn.Linear(condition_vec_chans, 512),
                                                self.act
                                                )
             self.cond_c_layers_2 = nn.Sequential(nn.Linear(512, 512),

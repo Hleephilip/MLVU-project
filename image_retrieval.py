@@ -101,6 +101,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/predict_img_B32_epoch=67-step=21963-v1.ckpt")
     parser.add_argument('--text_query', type=str, default="a picture of a car")
     parser.add_argument('--num_images_sample', type=int, default=10)
+    parser.add_argument('--condition_dim', type=int, default=512)
+    parser.add_argument('--x_dim', type=int, default=512)
     args = parser.parse_args()
 
     warnings.filterwarnings(action='ignore')

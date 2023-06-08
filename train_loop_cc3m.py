@@ -142,20 +142,22 @@ class LatentModel(pl.LightningModule):
         
         if self.target_domain == 'txt':
             print('Preparing train data')
-            self.train_data = ZipDataset_txt(self.train_data_path)
+            _train_data_path = [f"{self.train_data_path}_{i}.zip" for i in range(0, 33)]
+            self.train_data = ZipDataset_txt_combine(_train_data_path)
             print('train data:', len(self.train_data))
 
             print('Preparing val data')
-            self.val_data = ZipDataset_txt(self.val_data_path)
+            self.val_data = ZipDataset_txt_combine(self.val_data_path)
             print('val data:', len(self.val_data))
         
         elif self.target_domain == 'img':
             print('Preparing train data')
-            self.train_data = ZipDataset_img(self.train_data_path)
+            _train_data_path = [f"{self.train_data_path}_{i}.zip" for i in range(0, 33)]
+            self.train_data = ZipDataset_img_combine(_train_data_path)
             print('train data:', len(self.train_data))
 
             print('Preparing val data')
-            self.val_data = ZipDataset_img(self.val_data_path)
+            self.val_data = ZipDataset_img_combine(self.val_data_path)
             print('val data:', len(self.val_data))
 
         else:
@@ -591,9 +593,9 @@ class LatentModel(pl.LightningModule):
 
         print('Preparing val data')
         if self.target_domain == 'txt':
-            self.val_data = ZipDataset_txt(self.val_data_path)
+            self.val_data = ZipDataset_txt_combine(self.val_data_path)
         elif self.target_domain == 'img':
-            self.val_data = ZipDataset_img(self.val_data_path)
+            self.val_data = ZipDataset_img_combine(self.val_data_path)
         else:
             return NotImplementedError()
         print('val data:', len(self.val_data))
@@ -726,7 +728,7 @@ def ema(source, target, decay):
         target_dict[key].data.copy_(target_dict[key].data * decay + source_dict[key].data * (1 - decay))
 
 
-def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args: argparse = None):
+def train_cc3m(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args: argparse = None):
     print('conf:', conf.name)
     gpus = args.gpus
     # assert not (conf.fp16 and conf.grad_clip > 0

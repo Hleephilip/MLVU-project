@@ -28,6 +28,9 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_3', type=float, default=1.0)
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--use_default_init', action='store_true')
+    parser.add_argument('--condition_dim', type=int, default=512)
+    parser.add_argument('--x_dim', type=int, default=512)
+    parser.add_argument('--checkpoint_path', type=str, default="checkpoints")
     
     args = parser.parse_args()
 

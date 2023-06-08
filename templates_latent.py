@@ -106,7 +106,7 @@ def ffhq128_autoenc_latent():
 def latent_conditional_ddim(args):
     # conf = pretrain_ffhq256_autoenc()
     # conf = ffhq256_autoenc()
-    conf = latent_base(args.learning_rate)
+    conf = latent_base(args.learning_rate, args.condition_dim, args.x_dim, args.checkpoint_path)
     conf = latent_diffusion128_config(conf)
     conf = latent_mlp_2048_norm_10layers(conf)
     if args.batch_size == 64:

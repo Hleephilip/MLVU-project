@@ -160,6 +160,8 @@ class TrainConfig(BaseConfig):
     use_cache_dataset: bool = False
     data_cache_dir: str = os.path.expanduser('~/cache')
     work_cache_dir: str = os.path.expanduser('~/mycache')
+    condition_vec_dim: int = None
+    x_vec_dim: int = None
     # to be overridden
     name: str = ''
 
@@ -435,6 +437,8 @@ class TrainConfig(BaseConfig):
                     last_act=self.net_latent_net_last_act,
                     num_time_layers=self.net_latent_num_time_layers,
                     time_last_act=self.net_latent_time_last_act,
+                    condition_vec_dim=self.condition_vec_dim,
+                    x_vec_dim=self.x_vec_dim
                 )
 
         else:

@@ -3,11 +3,12 @@ import warnings
 from templates import *
 from templates_latent import *
 from typing import List
+from train_loop_cc3m import train_cc3m
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=2048, help='256, 512, 2048 available')
+    parser.add_argument('--batch_size', type=int, default=256, help='256, 512, 2048 available')
     parser.add_argument('--train_data_path', type=str, default='../DATA/COCO2014_train_CLIP_ViTB32.zip')
     parser.add_argument('--val_data_path', type=str, default='../DATA/COCO2014_val_CLIP_ViTB32.zip')
     parser.add_argument('--checkpoint_interval', type=int, default=1)
@@ -20,7 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_version', type=str, default='')
     parser.add_argument('--log_print_interval', type=int, default=1)
     parser.add_argument('--gpus', type=List[int], default=[0], help='recommendation: use 1 gpu')
-    parser.add_argument('--target', type=str, default="img", help='candidates: img, txt, wav')
+    parser.add_argument('--target', type=str, default="txt", help='candidates: img, txt, wav')
     parser.add_argument('--cfg_prob', type=float, default=0.1)
     parser.add_argument('--cfg_guidance', type=float, default=5.0)
     parser.add_argument('--lambda_1', type=float, default=1.0)
@@ -28,9 +29,9 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_3', type=float, default=1.0)
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--use_default_init', action='store_true')
-    parser.add_argument('--checkpoint_path', type=str, default="./pretrained/predict_img_L14_epoch=67-step=21963-v2.ckpt")
     parser.add_argument('--condition_dim', type=int, default=512)
     parser.add_argument('--x_dim', type=int, default=512)
+    parser.add_argument('--checkpoint_path', type=str, default="checkpoints")
     
     args = parser.parse_args()
 
@@ -38,4 +39,4 @@ if __name__ == '__main__':
     assert args.batch_size in [64, 256, 512, 2048]
     conf = latent_conditional_ddim(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    train(conf, mode='eval', device=device, args=args)
+    train_cc3m(conf, device=device, args=args)
