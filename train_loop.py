@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import copy
 import argparse
+import os
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import *
 from pytorch_lightning import loggers as pl_loggers
@@ -805,7 +806,7 @@ def train(conf: TrainConfig, nodes=1, mode: str = 'train', device = 'cuda', args
         for item in model.sim_result:
             print(f"Epoch {item[0]} : {item[1]:.4f}")
     elif mode == 'eval':
-        eval_path = args.checkpoint_path
+        eval_path = args.saved_checkpoint_path
         print('loading from:', eval_path)
         state = torch.load(eval_path, map_location='cpu')
         print('step:', state['global_step'])
