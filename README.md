@@ -144,4 +144,4 @@ TBD
 
 ## Acknowledgments
 
-This repository is implementation based on [Diffusion Autoencoders](https://github.com/phizaz /diffae).
+This repository is implementation based on [Diffusion Autoencoders](https://github.com/phizaz/diffae).
