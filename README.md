@@ -1,6 +1,6 @@
 # Modality Translation through Conditional Encoder-Decoder
 
-Machine Learning for Visual Understanding (M3224.000100, Spring 2023) Team project
+Team project in the "Machine Learning for Visual Understanding" (M3224.000100, Spring 2023) course.
 
 Hyunsoo Lee, Yoonsang Lee, Maria Pak, Jinri Kim
 
