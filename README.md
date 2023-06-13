@@ -4,7 +4,7 @@ Machine Learning for Visual Understanding (M3224.000100, Spring 2023) Team proje
 
 Hyunsoo Lee, Yoonsang Lee, Maria Pak, Jinri Kim
 
-Seoul National University
+Seoul National University 
 
 ## Abstract
 
