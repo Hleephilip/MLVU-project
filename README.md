@@ -1,16 +1,13 @@
-# MLVU-project
-2023-1 Machine Learning for Visual Understanding Team project
+# Modality Translation through Conditional Encoder-Decoder
 
-work in progress
+Machine Learning for Visual Understanding (M3224.000100, Spring 2023) Team project
 
 
-## Requirements
+Hyunsoo Lee, Yoonsang Lee, Maria Pak, Jinri Kim
 
-See [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt)
+## Abstract
 
-```
-pip install -r requirements.txt
-```
+With the recent rise of multi-modal learning, many of the developed models are task-specific, and, as a consequence, lack generalizability when applied to other types of downstream tasks. One of the representative models that overcomes this issue of generalizability is CLIP, which attacks downstream tasks using cosine similarity metric. However, CLIP has shown relatively low cosine similarity between text and image vector representations. For this reason, we aim to develop a new approach that more accurately maps the hyperplanes of text and image embeddings, and thus, achieves a high-quality text-image modality translation. To this end, we propose a new conditional encoder-decoder model that maps a latent space of one modality given another modality as a condition. We observe that our model is a general method that can be used with various latent encoders and decoders, which are not limited to multi-modal models. Experiments show that conditional encoder-decoder achieves comparable results with the previous state-of-the-art on several downstream tasks. 
 
 ## Data Preprocessing
 
@@ -48,7 +45,7 @@ The files at directory `../DATA/mscoco_data/` is like:
 
 ### CC3M
 
-Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md). Total 77G storage is required.
+Dataset can be downloaded from [here](https://github.com/rom1504/img2dataset/blob/main/dataset_examples/cc3m.md). 
 
 Command for training set preprocessing:
 
@@ -73,40 +70,45 @@ There are total 996 files in `../DATA/cc3m_train/`. Directory structure is like:
 
 ### Training
 
-Implementation based on [Diffusion Autoencoders](https://github.com/phizaz/diffae).
-
-Submit a job for training :
-
-```
-sbatch run.sh
-```
-
-Command for python (inside `run.sh`) : 
+Command for training conditional encoder-decoder using MS-COCO dataset: 
 
 ```
 python train_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
                             --val_data_path "../DATA/COCO2014_val_CLIP_ViTB32.zip" \
                             --epochs 100 --batch_size 256 --learning_rate 1e-4 \
-                            --log_name "exp1" --log_version "v0" --target "txt" --use_default_init
+                            --log_name "exp1" --target "txt" --use_default_init \
+                            --x_dim 512 --condition_dim 512 --lambda_2 2.0 --cfg_prob 0.05 \
+                            --checkpoint_path <YOUR CHECKPOINT PATH>
 ```
 
-Using only 1 gpu is highly recommended.
+Command for training conditional encoder-decoder using CC3M dataset: 
 
+```
+python train_latent_ddim_cc3m.py --train_data_path "../DATA/CC3M_processed/CC3M_train_CLIP_ViTL14" \
+                                 --val_data_path "../DATA/CC3M_processed/CC3M_val_CLIP_ViTL14.zip" \
+                                 --epochs 100 --batch_size 256 --learning_rate 1e-4 \
+                                 --log_name "exp1" --target "txt" --use_default_init \
+                                 --x_dim 768 --condition_dim 768 --lambda_2 2.0 --cfg_prob 0.05 \
+                                 --checkpoint_path <YOUR CHECKPOINT PATH>
+```
+
+DDP plugin is implemented, however using a single gpu is highly recommended.
 
 ### Evaluation
 
-Command for python (inside `run.sh`) : 
+Command for evaluating trained conditional encoder-decoder: 
 
 ```
 python eval_latent_ddim.py --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
                            --val_data_path "../DATA/COCO2014_val_CLIP_ViTB32.zip" \
-                           --checkpoint_path <YOUR_CHECKPOINT_PATH> \
-                           --batch_size 2048 --target "txt" --use_default_init
+                           --saved_checkpoint_path <YOUR_CHECKPOINT_PATH> \
+                           --batch_size 2048 --target "txt" --use_default_init \
+                           --x_dim 768 --condition_dim 768 --lambda_2 2.0 --cfg_prob 0.05
 ```
 
 ### Inference model using text prompt (Generate image embedding)
 
-Command for python (inside `run.sh`) : 
+Command for python : 
 
 ```
 python sample_z.py  --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
@@ -118,12 +120,28 @@ python sample_z.py  --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
 
 ## Downstream tasks
 
-TBD
+- Text-to-Image Generation
+- Image Retrieval
+- Image Captioning
+- Image Classification
 
-## Experiments
+## Requirements
 
-Check results in [here](https://docs.google.com/spreadsheets/d/1iorV8BHk1StLiq6OIMCb_GdRo_Lg9sVqjwcGnNep-6A/edit#gid=1980661715).
+See [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt)
+
+```
+pip install -r requirements.txt
+```
 
 ## Paper
 
-[Overleaf Link](https://www.overleaf.com/project/6453de916a02aa1601de1b36).
+Check in [here](https://drive.google.com/file/d/1nXQzt6FHOkRugbepxe6ukWz76u_oP-Ln/view?usp=sharing).
+
+## Presentation
+
+TBD
+
+
+## Acknowledgments
+
+This repository is implementation based on [Diffusion Autoencoders](https://github.com/phizaz /diffae).
