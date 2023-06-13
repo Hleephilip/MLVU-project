@@ -128,7 +128,7 @@ python sample_z.py  --train_data_path "../DATA/COCO2014_train_CLIP_ViTB32.zip" \
 
 ## Requirements
 
-See [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt)
+See [requirements.txt](https://github.com/frogyunmax/MLVU-project/blob/main/requirements.txt).
 
 ```
 pip install -r requirements.txt
